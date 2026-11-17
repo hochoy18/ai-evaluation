@@ -1,0 +1,19 @@
+[project]
+name = "ai-evaluation"
+version = "0.1.0"
+description = "AI 评测项目：评测框架调研与评测代码"
+readme = "README.md"
+authors = [
+    { name = "hochoy18", email = "hochoy18@sina.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "deepeval>=4.3.4",
+    "ipykernel",
+    "ragas>=0.4.4",
+    "textual>=8.2.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
