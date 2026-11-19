@@ -71,7 +71,7 @@ RAG 的失败面在**两端**,四个指标各管一摊:
 
 **做什么**:
 1. 组装 `LLMTestCase(input, actual_output, retrieval_context, expected_output)`——**retrieval_context 是第一次真正用到的字段**,此前单轮 case 里它一直空着;
-2. 写 `test_rag.py`(直接 pytest 形态,跳过脚本形态——已掌握,不重复学),4 指标 + `assert_test`;
+2. 写 `test_rag.py`(直接 pytest 形态,跳过脚本形态——已掌握,不重复学。**正典运行器 = `deepeval test run`**:本身即 pytest 包装器、产出 inspect 所需 test_run 快照,与「pytest 形态」不矛盾;裸 pytest 仅作快速调试,见架构 §9.3),4 指标 + `assert_test`;
 3. **精读每个指标的 How Is It Calculated,手算一遍**:
    - **Faithfulness**:答案拆成 N 条 claims → 逐条对 retrieval_context 做 verdict → 分数 = 有据 claims / 总 claims(与 KnowledgeRetention 同属 verdict 型算法);
    - **ContextualPrecision**:对每个检索节点判「对得出标准答案有没有用」→ **按排名加权**(排第几很重要,这是它与 ContextualRelevancy 的本质区别);
