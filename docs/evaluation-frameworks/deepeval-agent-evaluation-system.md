@@ -114,6 +114,8 @@ output = None
 
 inspect 解析优先级:命令行 PATH → `--folder`/`DEEPEVAL_RESULTS_FOLDER` → sqlite → 滚动快照。看历史运行直接传路径:`uv run deepeval inspect /path/to/snapshot.json`。
 
+**落盘坑(2026-11-19 实测)**:裸 `@observe` 脚本运行**不写**本地快照——连包一层 `with trace():` 也不写(`.latest_run_full.json` 的 testCases 仍为 0)。快照只由 **eval 运行**产生(`evals_iterator` / `deepeval test run`)。所以 `rag_app.py` demo 跑完后 `inspect` 看到的还是上一次 eval 的旧数据;想看 retriever span,得等第 2 步的 test run。插桩收集与结果落盘是两件事:**trace 在内存里活着 ≠ 结果落了盘**。
+
 ---
 
 ## 3. 指标选择地图:从症状到药方

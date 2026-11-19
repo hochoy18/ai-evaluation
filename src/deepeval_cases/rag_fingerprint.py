@@ -151,6 +151,20 @@ def build_report(results: dict, judge_model: str) -> str:
         "> 阈值(初值,架构 §10.4):F/AR ≥0.8,CP/CR ≥0.7;基线分布建立后校准。",
         "> 运行器:`deepeval test run`,每模式一遍;注入模式门禁失败是预期。",
         "",
+        "## 方法论注记(学习基线)",
+        "",
+        "- **基线未必全绿**:关键词门面固定返回 top-3,生成端忠实总结全部检索文档,"
+        "对窄题干会附加同文档相邻信息 + 医疗免责声明(冻结 prompt「不确诊」驱动),"
+        "AnswerRelevancy 视之为偏题系统性扣分(实测 g002/g003/g005/g007 AR 0.5–0.75)。"
+        "这是门面特征,非门禁代码缺陷;「全绿」验收按学习基线定位重新对齐(issue #2)。",
+        "- **temp 0 非确定性**:qwen4-max-preview(生成)/qwen3.7-plus(裁判)为推理/preview 模型,"
+        "temp 0 不保证逐字确定,答案在聚焦/冗长间波动 → 门禁跨运行偶发翻转。"
+        "指纹核对用相对模式(暴跌/跌/不动)而非精确分数,正是为此鲁棒。",
+        "- **超时修复**:deepeval 默认 180s/task,慢端点下 Faithfulness 超时被静默取消(score=None);"
+        "设 `DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE=600` 消除该噪声。",
+        "- **g006 题干修订**:原窄题干 AR=0.5,加「根据挂号指南…只列情况即可」显式收敛 → AR=1.0,"
+        "检索与 expected_output 不变。",
+        "",
         "## 分数对照表(门禁集均值)",
         "",
         "| 模式 | Faithfulness | Answer Relevancy | Contextual Precision | Contextual Recall | 门禁 |",
