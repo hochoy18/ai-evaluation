@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 评测全流程 · 从插桩到门禁</title>
+<style>
+  :root{
+    --app:#6366f1;        /* 应用 LLM · indigo */
+    --inst:#0ea5e9;       /* 插桩 · sky */
+    --judge:#f43f5e;      /* 裁判 LLM · rose */
+    --agent:#8b5cf6;      /* agent span · violet */
+    --llm:#6366f1;        /* llm span · indigo */
+    --tool:#14b8a6;       /* tool span · teal */
+    --ink:#0f172a; --sub:#5b6478; --faint:#8a93a6;
+    --line:#e7e9f0; --paper:#f4f5fa; --card:#ffffff;
+    --ok:#16a34a; --bad:#e11d48; --warn:#d97706;
+    --code-bg:#0d1424; --code-ink:#e6e9f2;
+    --radius:18px;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px -12px rgba(16,24,40,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+    background:
+      radial-gradient(1200px 500px at 80% -10%, #eef0ff 0%, transparent 60%),
+      radial-gradient(900px 420px at -10% 0%, #e6f6fb 0%, transparent 55%),
+      var(--paper);
+    color:var(--ink); line-height:1.78; -webkit-font-smoothing:antialiased;
+  }
+  code,pre,.mono{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace}
+
+  /* ---------- 顶部导航 ---------- */
+  nav{
+    position:sticky; top:0; z-index:50;
+    backdrop-filter:saturate(180%) blur(14px);
+    background:rgba(255,255,255,.78); border-bottom:1px solid var(--line);
+  }
+  nav .inner{max-width:1000px;margin:0 auto;display:flex;align-items:center;gap:8px;padding:11px 22px;flex-wrap:wrap}
+  nav .brand{font-weight:800;font-size:14px;letter-spacing:.3px;margin-right:6px}
+  nav .brand span{background:linear-gradient(90deg,var(--app),var(--judge));-webkit-background-clip:text;background-clip:text;color:transparent}
+  nav a{font-size:12.5px;color:var(--sub);text-decoration:none;padding:5px 11px;border-radius:999px;transition:.18s}
+  nav a:hover{background:#eef0f7;color:var(--ink)}
+
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px 70px}
+
+  /* ---------- Hero ---------- */
+  header.hero{
+    margin:34px 0 30px; border-radius:26px; overflow:hidden; position:relative;
+    background:linear-gradient(135deg,#0f172a 0%,#1e293b 55%,#312e81 130%);
+    color:#fff; padding:46px 44px 40px; box-shadow:0 24px 60px -28px rgba(30,41,59,.6);
+  }
+  header.hero::after{content:"";position:absolute;inset:0;background:
+    radial-gradient(600px 240px at 90% -20%, rgba(99,102,241,.45), transparent 60%),
+    radial-gradient(500px 220px at 10% 120%, rgba(244,63,94,.30), transparent 60%);pointer-events:none}
+  .hero .kicker{position:relative;font-size:12.5px;letter-spacing:2.5px;text-transform:uppercase;color:#a5b4fc;font-weight:700}
+  .hero h1{position:relative;font-size:33px;line-height:1.25;font-weight:800;margin:12px 0 14px;letter-spacing:.3px}
+  .hero h1 em{font-style:normal;background:linear-gradient(90deg,#818cf8,#fda4af);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lead{position:relative;font-size:15.5px;color:#cbd5e1;max-width:760px}
+  .hero p.lead b{color:#fff}
+  .roles{position:relative;display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+  .role{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+    padding:9px 15px;border-radius:12px;font-size:13px}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:0 0 0 4px rgba(255,255,255,.06)}
+  .role small{color:#94a3b8;display:block;font-size:11.5px;line-height:1.3}
+  .role b{font-size:13px}
+
+  /* ---------- 通用卡片 / 章节 ---------- */
+  section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:30px 34px;margin-bottom:24px;box-shadow:var(--shadow)}
+  .sec-head{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+  .sec-num{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+    font-weight:800;font-size:16px;color:#fff;background:linear-gradient(135deg,var(--app),#8b5cf6);
+    box-shadow:0 6px 16px -6px rgba(99,102,241,.7)}
+  h2{font-size:22px;font-weight:800;letter-spacing:.2px}
+  .sec-sub{color:var(--sub);font-size:14px;margin:2px 0 18px 52px}
+  h3{font-size:16px;font-weight:700;margin:22px 0 8px}
+  p{margin:9px 0;font-size:14.7px}
+  p.note{color:var(--sub);font-size:13.5px}
+  b.hl{color:var(--app)} b.hl-j{color:var(--judge)} b.hl-i{color:var(--inst)}
+  .bad{color:var(--bad);font-weight:700}.ok{color:var(--ok);font-weight:700}
+
+  /* ---------- 图 ---------- */
+  figure{margin:20px 0 8px;background:linear-gradient(180deg,#fbfcff,#f6f7fc);
+    border:1px solid var(--line);border-radius:16px;padding:18px 16px 10px}
+  figure svg{width:100%;height:auto;display:block}
+  figcaption{text-align:center;color:var(--faint);font-size:12.5px;margin-top:8px;padding-bottom:4px}
+
+  /* ---------- 代码块 ---------- */
+  pre.code{background:var(--code-bg);color:var(--code-ink);border-radius:14px;padding:18px 20px;
+    font-size:12.8px;line-height:1.7;overflow-x:auto;margin:14px 0;border:1px solid #1e293b;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+  pre.code .c{color:#6b7a99}      /* 注释 */
+  pre.code .k{color:#c4b5fd}      /* 关键字/装饰器 */
+  pre.code .f{color:#7dd3fc}      /* 函数 */
+  pre.code .s{color:#86efac}      /* 字符串 */
+  pre.code .n{color:#fca5a5}      /* 数字/强调 */
+  pre.code .t{color:#fcd34d}      /* 类型 */
+  .code-cap{font-size:12px;color:var(--faint);margin:-6px 0 14px 2px}
+  code.inl{background:#eef0f7;border:1px solid #e2e5ef;padding:1px 7px;border-radius:6px;font-size:12.8px;color:#4338ca}
+
+  /* ---------- 时间线步骤 ---------- */
+  .steps{position:relative;margin:18px 0 6px;padding-left:8px}
+  .step{position:relative;padding:0 0 20px 46px}
+  .step::before{content:"";position:absolute;left:15px;top:30px;bottom:-2px;width:2px;background:linear-gradient(var(--line),var(--line))}
+  .step:last-child::before{display:none}
+  .step .idx{position:absolute;left:0;top:0;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
+    font-weight:800;font-size:13px;color:#fff;background:linear-gradient(135deg,var(--inst),#6366f1);box-shadow:0 5px 12px -5px rgba(14,165,233,.7)}
+  .step.agent-step .idx{background:linear-gradient(135deg,var(--agent),#6366f1)}
+  .step.judge-step .idx{background:linear-gradient(135deg,var(--judge),#fb923c)}
+  .step h4{font-size:15px;font-weight:700;margin-bottom:3px}
+  .step h4 .tag{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;margin-left:8px;vertical-align:middle}
+  .tag.t-inst{background:#e0f2fe;color:#0369a1}
+  .tag.t-app{background:#eef2ff;color:#4338ca}
+  .tag.t-judge{background:#ffe4e6;color:#be123c}
+  .step p{font-size:13.8px;margin:4px 0}
+  .step .role-line{font-size:12.5px;color:var(--sub)}
+
+  /* ---------- 表格 ---------- */
+  .tbl-wrap{overflow-x:auto;margin:16px 0;border-radius:14px;border:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:13.6px;min-width:560px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{background:linear-gradient(180deg,#f3f4fb,#eceef7);font-size:12.5px;font-weight:700;color:#374151;letter-spacing:.3px}
+  tbody tr:nth-child(even){background:#fafbff}
+  tbody tr:last-child td{border-bottom:none}
+  td .pill{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .pill.p-agent{background:#f3e8ff;color:#7c3aed}
+  .pill.p-llm{background:#eef2ff;color:#4338ca}
+  .pill.p-tool{background:#ccfbf1;color:#0f766e}
+  .pill.p-trace{background:#ffe4e6;color:#be123c}
+
+  /* ---------- 提示框 ---------- */
+  .callout{border-radius:14px;padding:16px 20px;margin:18px 0;font-size:14px;border:1px solid;border-left-width:5px}
+  .callout.key{background:#eef2ff;border-color:#c7d2fe;border-left-color:var(--app)}
+  .callout.warn{background:#fffbeb;border-color:#fde68a;border-left-color:var(--warn)}
+  .callout.danger{background:#fff1f2;border-color:#fecdd3;border-left-color:var(--bad)}
+  .callout b{display:block;margin-bottom:3px}
+
+  /* ---------- 总结 ---------- */
+  .finale{background:linear-gradient(135deg,#0f172a,#312e81 120%);color:#fff;border:none;text-align:center;padding:38px 36px}
+  .finale .big{font-size:22px;font-weight:800;line-height:1.5;margin-bottom:12px}
+  .finale .big em{font-style:normal;color:#fda4af}
+  .finale p{color:#c7d2fe;font-size:14.5px;max-width:760px;margin:6px auto}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:20px;font-size:12.5px;color:#cbd5e1}
+  .legend span{display:flex;align-items:center;gap:7px}
+
+  footer{text-align:center;color:var(--faint);font-size:12.5px;margin-top:30px;line-height:1.9}
+  footer a{color:var(--sub)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:720px){
+    .grid2{grid-template-columns:1fr}
+    header.hero{padding:34px 24px}
+    .hero h1{font-size:26px}
+    section{padding:24px 20px}
+    .sec-sub{margin-left:0}
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="inner">
+  <div class="brand">Agent 评测<span>全流程</span></div>
+  <a href="#overview">全景</a>
+  <a href="#runtime">运行期</a>
+  <a href="#tree">Span 树</a>
+  <a href="#roles">三件套</a>
+  <a href="#assert">assert_test</a>
+  <a href="#timing">judge 时机</a>
+  <a href="#mapping">数据→指标</a>
+  <a href="#gate">门禁</a>
+</div></nav>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">DeepEval · Tracing · LLM-as-a-Judge</div>
+  <h1>Agent 评测全流程<br>从 <em>@observe 插桩</em> 到 <em>CI 门禁</em></h1>
+  <p class="lead">以「订明天纽约→洛杉矶最便宜航班」为例，把整条链路讲透：<b>运行期</b>边跑 agent 边录 trace（应用 LLM 干活，0 次裁判）；<b>评测期</b>读这棵 trace 树调 judge 打分。<code style="color:#c7d2fe">@observe</code> / <code style="color:#c7d2fe">update_current_span</code> / <code style="color:#c7d2fe">update_current_trace</code> 全在运行期，作用是<b>把评测要用的数据和指标，预先挂到 trace 树的正确位置</b>。</p>
+  <div class="roles">
+    <div class="role"><span class="dot" style="background:var(--app)"></span><div><b>应用 LLM</b><small>app_client · 真正决策/生成</small></div></div>
+    <div class="role"><span class="dot" style="background:var(--inst)"></span><div><b>插桩三件套</b><small>记录轨迹 + 挂数据/指标 · 不调 LLM</small></div></div>
+    <div class="role"><span class="dot" style="background:var(--judge)"></span><div><b>裁判 LLM</b><small>judge_model · 评测期打分</small></div></div>
+  </div>
+</header>
+
+<!-- ===================== 1 全景 ===================== -->
+<section id="overview">
+  <div class="sec-head"><div class="sec-num">1</div><h2>全景：两个阶段，三类角色</h2></div>
+  <div class="sec-sub">先建立总图——评测不是「跑 agent 时顺便打分」，而是「先录后评」两段式。</div>
+
+  <figure>
+    <svg viewBox="0 0 960 320" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#94a3b8"/></marker>
+        <linearGradient id="gRun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0f9ff"/><stop offset="1" stop-color="#e0f2fe"/></linearGradient>
+        <linearGradient id="gJudge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff1f2"/><stop offset="1" stop-color="#ffe4e6"/></linearGradient>
+      </defs>
+
+      <!-- 左：运行期 -->
+      <rect x="20" y="30" width="410" height="250" rx="18" fill="url(#gRun)" stroke="#7dd3fc" stroke-width="1.5"/>
+      <text x="42" y="62" font-size="16" font-weight="800" fill="#0369a1">① 运行期 · 记录</text>
+      <text x="42" y="84" font-size="12" fill="#0c4a6e">travel_agent(golden.input) 真实运行</text>
+
+      <rect x="42" y="100" width="366" height="40" rx="10" fill="#fff" stroke="#6366f1"/>
+      <circle cx="62" cy="120" r="6" fill="#6366f1"/>
+      <text x="78" y="125" font-size="13" fill="#3730a3" font-weight="700">应用 LLM 决策 + 工具 + 生成回复</text>
+
+      <rect x="42" y="150" width="366" height="40" rx="10" fill="#fff" stroke="#0ea5e9"/>
+      <circle cx="62" cy="170" r="6" fill="#0ea5e9"/>
+      <text x="78" y="175" font-size="13" fill="#075985" font-weight="700">@observe 建 span 树（自动捕获入参/返回）</text>
+
+      <rect x="42" y="200" width="366" height="40" rx="10" fill="#fff" stroke="#0ea5e9"/>
+      <circle cx="62" cy="220" r="6" fill="#0ea5e9"/>
+      <text x="78" y="225" font-size="13" fill="#075985" font-weight="700">update_* 挂数据 + 指标对象</text>
+
+      <text x="225" y="266" text-anchor="middle" font-size="12.5" fill="#0369a1" font-weight="700">裁判调用次数 = 0</text>
+
+      <!-- 中间箭头 -->
+      <line x1="432" y1="155" x2="528" y2="155" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#ar)"/>
+      <text x="480" y="140" text-anchor="middle" font-size="12" fill="#475569" font-weight="700">trace 树</text>
+      <text x="480" y="178" text-anchor="middle" font-size="11" fill="#94a3b8">已录好</text>
+
+      <!-- 右：评测期 -->
+      <rect x="530" y="30" width="410" height="250" rx="18" fill="url(#gJudge)" stroke="#fda4af" stroke-width="1.5"/>
+      <text x="552" y="62" font-size="16" font-weight="800" fill="#be123c">② 评测期 · 打分</text>
+      <text x="552" y="84" font-size="12" fill="#9f1239">assert_test(golden=...) / evals_iterator</text>
+
+      <rect x="552" y="100" width="366" height="40" rx="10" fill="#fff" stroke="#f43f5e"/>
+      <circle cx="572" cy="120" r="6" fill="#f43f5e"/>
+      <text x="588" y="125" font-size="13" fill="#9f1239" font-weight="700">读活 trace → 组装 LLMTestCase</text>
+
+      <rect x="552" y="150" width="366" height="40" rx="10" fill="#fff" stroke="#f43f5e"/>
+      <circle cx="572" cy="170" r="6" fill="#f43f5e"/>
+      <text x="588" y="175" font-size="13" fill="#9f1239" font-weight="700">DFS 遍历 span → metric.measure()</text>
+
+      <rect x="552" y="200" width="366" height="40" rx="10" fill="#fff" stroke="#f43f5e"/>
+      <circle cx="572" cy="220" r="6" fill="#f43f5e"/>
+      <text x="588" y="225" font-size="13" fill="#9f1239" font-weight="700">裁判 LLM 打分 → metricsData → 断言</text>
+
+      <text x="735" y="266" text-anchor="middle" font-size="12.5" fill="#be123c" font-weight="700">裁判调用多次（每指标约 2 次）</text>
+
+      <text x="480" y="308" text-anchor="middle" font-size="12.5" fill="#64748b">应用 LLM「干活」与裁判 LLM「打分」时机分明，互不重叠</text>
+    </svg>
+    <figcaption>图 1 · 两段式流水线：运行期只记录（0 裁判），评测期才调 judge</figcaption>
+  </figure>
+
+  <div class="callout key">
+    <b>核心一句话</b>
+    插桩三件套全在「运行期」，它们<b>不调用任何 LLM</b>，只负责把「评测要用的数据 + 指标对象」挂到 trace 树的正确节点上。真正调 judge 的，是评测期的 <code class="inl">metric.measure()</code>。
+  </div>
+</section>
+
+<!-- ===================== 2 运行期时间线 ===================== -->
+<section id="runtime">
+  <div class="sec-head"><div class="sec-num">2</div><h2>运行期：逐步走一遍 agent</h2></div>
+  <div class="sec-sub">基线任务「订明天从纽约到洛杉矶最便宜的航班」。看每个插桩函数作用在哪个环节。</div>
+
+  <div class="steps">
+    <div class="step agent-step">
+      <div class="idx">1</div>
+      <h4>进入 travel_agent <span class="tag t-inst">@observe(type="agent")</span></h4>
+      <p>创建 <b class="hl">agent span（整棵树的根）</b>，开始计时，自动捕获入参 <code class="inl">user_input</code>。</p>
+      <p class="role-line">▷ 对评测：没有根，StepEfficiency 无从审计整棵树，TaskCompletion 没有 trace 可读。</p>
+    </div>
+    <div class="step">
+      <div class="idx">2</div>
+      <h4>构造 system prompt（业务逻辑）</h4>
+      <p>注入「今天 2026-11-19，明天即 2026-11-20」，让 LLM 能解析「明天」。<span class="bad">（漏了这步，TaskCompletion 曾跌到 0.05）</span></p>
+    </div>
+    <div class="step">
+      <div class="idx">3</div>
+      <h4>第一次决策 call_llm <span class="tag t-inst">@observe(type="llm")</span><span class="tag t-app">应用 LLM ①</span></h4>
+      <p>建 <b class="hl">llm span①</b>，自动记 input=messages / output / token。应用 LLM 决定「先 search_flights」。</p>
+      <p>因 <code class="inl">msg.tool_calls</code> 存在 → <b class="hl-i">update_current_span</b> 给这个决策 span 挂 <code class="inl">tools_called</code> / <code class="inl">expected_tools</code> / <code class="inl">metrics=[ToolCorrectness, ArgumentCorrectness]</code>。</p>
+      <p class="role-line">▷ 对评测：组件级指标必须挂在「做工具决策的 llm span」上，且有数据可评。</p>
+    </div>
+    <div class="step">
+      <div class="idx">4</div>
+      <h4>执行 search_flights <span class="tag t-inst">@observe(type="tool")</span></h4>
+      <p>建 <b style="color:var(--tool)">tool span</b>，自动记入参与返回 <code class="inl">[{FL123,$450},{FL456,$380}]</code>。</p>
+      <p class="role-line">▷ 注意：工具在 travel_agent 循环里执行，所以 tool span 是 <b>agent 的子节点</b>（与 call_llm 平级），不是 llm 的子节点。</p>
+    </div>
+    <div class="step">
+      <div class="idx">5</div>
+      <h4>第二次决策 call_llm <span class="tag t-inst">@observe(type="llm")</span><span class="tag t-app">应用 LLM ②</span></h4>
+      <p>建 <b class="hl">llm span②</b>；搜过了 → 决定 book_flight。<b class="hl-i">update_current_span</b> 再挂组件指标（expected=book_flight）。</p>
+    </div>
+    <div class="step">
+      <div class="idx">6</div>
+      <h4>执行 book_flight <span class="tag t-inst">@observe(type="tool")</span></h4>
+      <p>建 <b style="color:var(--tool)">tool span</b>，返回 <code class="inl">{confirmation:"CONF-789", flight_id:"FL456"}</code>。</p>
+    </div>
+    <div class="step">
+      <div class="idx">7</div>
+      <h4>最终回复 call_llm <span class="tag t-inst">@observe(type="llm")</span><span class="tag t-app">应用 LLM ③</span></h4>
+      <p>建 <b class="hl">llm span③</b>，生成「已预订 FL456 · $380 · CONF-789」。<code class="inl">tool_calls</code> 为空 → <b>不挂组件指标</b>（无工具决策可评）。</p>
+    </div>
+    <div class="step agent-step">
+      <div class="idx">8</div>
+      <h4>收尾 <span class="tag t-inst">update_current_trace</span></h4>
+      <p>给 <b style="color:var(--agent)">trace 根</b>挂整体 <code class="inl">input</code> / <code class="inl">output</code> / 全程 <code class="inl">tools_called</code> 汇总 / <code class="inl">expected_tools=[search, book]</code>。</p>
+      <p class="role-line">▷ 对评测：TaskCompletion 要从 trace.input 推断 task、从 output 提取 outcome——没这步就没有「任务/结果」可对比。</p>
+    </div>
+    <div class="step agent-step">
+      <div class="idx">9</div>
+      <h4>travel_agent 返回</h4>
+      <p>agent span 关闭，<b>整棵 trace 树录好</b>。运行期结束：<b class="ok">3 次应用 LLM 调用，0 次裁判调用</b>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3 Span 树 ===================== -->
+<section id="tree">
+  <div class="sec-head"><div class="sec-num">3</div><h2>录好的 Span 树（评测对象）</h2></div>
+  <div class="sec-sub">结构经真实 test_run_*.json 核实：tool 与 call_llm 平级挂在 agent 下；每个 call_llm 内嵌一个 SDK 自动插桩的 chat span。</div>
+
+  <figure>
+    <svg viewBox="0 0 960 470" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+      <defs>
+        <marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#c4b5fd"/></marker>
+      </defs>
+
+      <!-- root -->
+      <rect x="320" y="18" width="320" height="58" rx="13" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+      <text x="480" y="42" text-anchor="middle" font-size="14.5" font-weight="800" fill="#6d28d9">agent span · travel_agent</text>
+      <text x="480" y="62" text-anchor="middle" font-size="11" fill="#7c3aed">update_current_trace：input / output / tools / expected</text>
+
+      <!-- rail -->
+      <line x1="480" y1="76" x2="480" y2="104" stroke="#c4b5fd" stroke-width="2"/>
+      <line x1="100" y1="104" x2="800" y2="104" stroke="#c4b5fd" stroke-width="2"/>
+      <g stroke="#c4b5fd" stroke-width="2">
+        <line x1="100" y1="104" x2="100" y2="130"/>
+        <line x1="275" y1="104" x2="275" y2="130"/>
+        <line x1="450" y1="104" x2="450" y2="130"/>
+        <line x1="625" y1="104" x2="625" y2="130"/>
+        <line x1="800" y1="104" x2="800" y2="130"/>
+      </g>
+
+      <!-- child 1: llm decision search -->
+      <rect x="20" y="130" width="160" height="92" rx="11" fill="#eef2ff" stroke="#6366f1" stroke-width="1.6"/>
+      <circle cx="40" cy="150" r="11" fill="#6366f1"/><text x="40" y="154" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">1</text>
+      <text x="100" y="153" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3730a3">llm · call_llm</text>
+      <text x="100" y="172" text-anchor="middle" font-size="11" fill="#475569">决策：search</text>
+      <rect x="34" y="182" width="132" height="20" rx="6" fill="#fff" stroke="#c7d2fe"/>
+      <text x="100" y="196" text-anchor="middle" font-size="10" fill="#6366f1">↳ chat（SDK 自动）</text>
+      <text x="100" y="216" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="700">挂组件指标 ✦</text>
+
+      <!-- child 2: tool search -->
+      <rect x="200" y="130" width="150" height="92" rx="11" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+      <circle cx="220" cy="150" r="11" fill="#14b8a6"/><text x="220" y="154" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">2</text>
+      <text x="275" y="153" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f766e">tool · search</text>
+      <text x="275" y="174" text-anchor="middle" font-size="10.5" fill="#475569">返回 FL123/FL456</text>
+      <text x="275" y="200" text-anchor="middle" font-size="10" fill="#94a3b8">@observe 自动</text>
+
+      <!-- child 3: llm decision book -->
+      <rect x="370" y="130" width="160" height="92" rx="11" fill="#eef2ff" stroke="#6366f1" stroke-width="1.6"/>
+      <circle cx="390" cy="150" r="11" fill="#6366f1"/><text x="390" y="154" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">3</text>
+      <text x="450" y="153" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3730a3">llm · call_llm</text>
+      <text x="450" y="172" text-anchor="middle" font-size="11" fill="#475569">决策：book</text>
+      <rect x="384" y="182" width="132" height="20" rx="6" fill="#fff" stroke="#c7d2fe"/>
+      <text x="450" y="196" text-anchor="middle" font-size="10" fill="#6366f1">↳ chat（SDK 自动）</text>
+      <text x="450" y="216" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="700">挂组件指标 ✦</text>
+
+      <!-- child 4: tool book -->
+      <rect x="550" y="130" width="150" height="92" rx="11" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+      <circle cx="570" cy="150" r="11" fill="#14b8a6"/><text x="570" y="154" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">4</text>
+      <text x="625" y="153" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f766e">tool · book</text>
+      <text x="625" y="174" text-anchor="middle" font-size="10.5" fill="#475569">返回 CONF-789</text>
+      <text x="625" y="200" text-anchor="middle" font-size="10" fill="#94a3b8">@observe 自动</text>
+
+      <!-- child 5: llm final -->
+      <rect x="720" y="130" width="160" height="92" rx="11" fill="#eef2ff" stroke="#6366f1" stroke-width="1.6"/>
+      <circle cx="740" cy="150" r="11" fill="#6366f1"/><text x="740" y="154" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">5</text>
+      <text x="800" y="153" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3730a3">llm · call_llm</text>
+      <text x="800" y="172" text-anchor="middle" font-size="11" fill="#475569">最终回复</text>
+      <rect x="734" y="182" width="132" height="20" rx="6" fill="#fff" stroke="#c7d2fe"/>
+      <text x="800" y="196" text-anchor="middle" font-size="10" fill="#6366f1">↳ chat（SDK 自动）</text>
+      <text x="800" y="216" text-anchor="middle" font-size="10" fill="#94a3b8">无组件指标</text>
+
+      <!-- 执行顺序 -->
+      <text x="480" y="252" text-anchor="middle" font-size="12" fill="#64748b">执行顺序：① 决策search → ② search → ③ 决策book → ④ book → ⑤ 回复（编号即时间序）</text>
+
+      <!-- 指标归属说明 -->
+      <rect x="60" y="278" width="400" height="120" rx="13" fill="#fff" stroke="#c7d2fe"/>
+      <text x="80" y="304" font-size="13" font-weight="800" fill="#4338ca">✦ 组件级指标（挂 llm 决策 span）</text>
+      <text x="80" y="328" font-size="12" fill="#475569">ToolCorrectness：tools_called vs expected_tools</text>
+      <text x="80" y="350" font-size="12" fill="#475569">ArgumentCorrectness：input_parameters 对不对</text>
+      <text x="80" y="378" font-size="11.5" fill="#0369a1">由 update_current_span 写入数据 + 指标对象</text>
+
+      <rect x="500" y="278" width="400" height="120" rx="13" fill="#fff" stroke="#fecdd3"/>
+      <text x="520" y="304" font-size="13" font-weight="800" fill="#be123c">◈ 轨迹级指标（挂 trace 根）</text>
+      <text x="520" y="328" font-size="12" fill="#475569">TaskCompletion：input→task，output→outcome</text>
+      <text x="520" y="350" font-size="12" fill="#475569">StepEfficiency：审计整棵树的每一步</text>
+      <text x="520" y="378" font-size="11.5" fill="#9f1239">由 evals_iterator / assert_test 的 metrics 传入</text>
+
+      <!-- legend -->
+      <g font-size="11.5">
+        <rect x="240" y="424" width="14" height="14" rx="4" fill="#f5f3ff" stroke="#8b5cf6"/><text x="260" y="435" fill="#475569">agent</text>
+        <rect x="330" y="424" width="14" height="14" rx="4" fill="#eef2ff" stroke="#6366f1"/><text x="350" y="435" fill="#475569">llm</text>
+        <rect x="410" y="424" width="14" height="14" rx="4" fill="#f0fdfa" stroke="#14b8a6"/><text x="430" y="435" fill="#475569">tool</text>
+        <text x="500" y="435" fill="#94a3b8">✦ 组件级</text>
+        <text x="590" y="435" fill="#94a3b8">◈ 轨迹级</text>
+      </g>
+    </svg>
+    <figcaption>图 2 · 真实 span 树（父子关系经 test_run JSON 核实）：tool 与 call_llm 平级，组件指标挂决策 span，轨迹指标挂根</figcaption>
+  </figure>
+
+  <div class="callout warn">
+    <b>易错点（已核实纠正）</b>
+    tool span 的父节点是 <b>agent</b>，不是 llm——因为工具是在 <code class="inl">travel_agent</code> 循环里、<code class="inl">call_llm</code> 返回<b>之后</b>才执行的，此时 llm span 已关闭。每个 <code class="inl">call_llm</code> 内部那个 <code class="inl">chat</code> span，才是 SDK 自动插桩的真正模型调用。
+  </div>
+</section>
+
+<!-- ===================== 4 三件套分工 ===================== -->
+<section id="roles">
+  <div class="sec-head"><div class="sec-num">4</div><h2>三件套各自的作用环节</h2></div>
+  <div class="sec-sub">一句话：@observe 搭骨架，update_current_span 挂局部语义，update_current_trace 挂全局语义。</div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:24%">函数</th><th style="width:22%">作用环节</th><th style="width:28%">记录什么</th><th>对评测的作用</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code class="inl">@observe(type=...)</code></td>
+          <td>每个函数<b>进入/退出</b>时</td>
+          <td>自动建 span 节点 + 入参/返回/耗时/嵌套</td>
+          <td><b>搭骨架</b>：没有 span 树，轨迹级指标无对象可评</td>
+        </tr>
+        <tr>
+          <td><code class="inl">update_current_span</code></td>
+          <td>做工具决策的 <b>llm call 内</b></td>
+          <td>该次决策的 tools_called / expected_tools / <b>组件指标对象</b></td>
+          <td><b>挂组件级</b>：让 ToolCorrectness / ArgumentCorrectness 有数据、有归属</td>
+        </tr>
+        <tr>
+          <td><code class="inl">update_current_trace</code></td>
+          <td><b>agent 收尾</b>时</td>
+          <td>整体 input/output / 全程工具汇总 / expected_tools</td>
+          <td><b>挂轨迹级</b>：让 TaskCompletion 有 task/outcome，StepEfficiency 有完整树</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>它们记录的数据长什么样（ToolCall）</h3>
+  <p class="note"><code class="inl">tools_called</code> / <code class="inl">expected_tools</code> 都是 <code class="inl">List[ToolCall]</code>，序列化后字段转驼峰：</p>
+  <pre class="code"><span class="c">// 你真实 test_run_*.json 里的 toolsCalled（agent 根，全程汇总）</span>
+[
+  { <span class="t">"name"</span>: <span class="s">"search_flights"</span>, <span class="t">"type"</span>: <span class="s">"FUNCTION"</span>,
+    <span class="t">"inputParameters"</span>: {<span class="t">"origin"</span>:<span class="s">"纽约"</span>,<span class="t">"destination"</span>:<span class="s">"洛杉矶"</span>,<span class="t">"date"</span>:<span class="s">"2026-11-20"</span>},
+    <span class="t">"output"</span>: [{<span class="t">"id"</span>:<span class="s">"FL123"</span>,<span class="t">"price"</span>:<span class="n">450</span>},{<span class="t">"id"</span>:<span class="s">"FL456"</span>,<span class="t">"price"</span>:<span class="n">380</span>}] },
+  { <span class="t">"name"</span>: <span class="s">"book_flight"</span>, <span class="t">"type"</span>: <span class="s">"FUNCTION"</span>,
+    <span class="t">"inputParameters"</span>: {<span class="t">"flight_id"</span>:<span class="s">"FL456"</span>},
+    <span class="t">"output"</span>: {<span class="t">"confirmation"</span>:<span class="s">"CONF-789"</span>,<span class="t">"flight_id"</span>:<span class="s">"FL456"</span>} }
+]</pre>
+  <div class="callout key">
+    <b>记录 ≠ 评测：metrics 存的是「对象」不是「分数」</b>
+    记录时 <code class="inl">span.metrics = [ToolCorrectnessMetric实例, ...]</code>，只有 threshold/model 等<b>配置</b>，没有 score。要等评测期 <code class="inl">measure()</code> 调 judge 后，才生成 <code class="inl">metricsData</code>（name / score / threshold / success / reason）。
+  </div>
+</section>
+
+<!-- ===================== 5 assert_test 流程 ===================== -->
+<section id="assert">
+  <div class="sec-head"><div class="sec-num">5</div><h2>评测期：assert_test 内部做了什么</h2></div>
+  <div class="sec-sub">它是「执行 + 断言」的外层编排：组装用例 → DFS 调 measure → 汇总 → 不达标就 raise。</div>
+
+  <figure>
+    <svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+      <defs>
+        <marker id="fa" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#94a3b8"/></marker>
+        <marker id="fr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f43f5e"/></marker>
+        <marker id="fg" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#16a34a"/></marker>
+      </defs>
+
+      <!-- 主干连线 -->
+      <g stroke="#94a3b8" stroke-width="2" fill="none">
+        <line x1="290" y1="56" x2="290" y2="76" marker-end="url(#fa)"/>
+        <line x1="290" y1="116" x2="290" y2="136" marker-end="url(#fa)"/>
+        <line x1="290" y1="182" x2="290" y2="188" marker-end="url(#fa)"/>
+        <line x1="290" y1="256" x2="290" y2="276" marker-end="url(#fa)"/>
+        <line x1="290" y1="322" x2="290" y2="342" marker-end="url(#fa)"/>
+        <line x1="290" y1="382" x2="290" y2="402" marker-end="url(#fa)"/>
+        <line x1="290" y1="454" x2="290" y2="474" marker-end="url(#fa)"/>
+        <line x1="290" y1="520" x2="290" y2="526" marker-end="url(#fa)"/>
+        <line x1="290" y1="594" x2="290" y2="614" marker-end="url(#fg)"/>
+      </g>
+      <!-- 是 / 否 分支线 -->
+      <line x1="410" y1="222" x2="520" y2="222" stroke="#f43f5e" stroke-width="2" marker-end="url(#fr)"/>
+      <polyline points="410,560 470,560 470,640 520,640" stroke="#f43f5e" stroke-width="2" fill="none" marker-end="url(#fr)"/>
+      <text x="300" y="270" font-size="11.5" fill="#16a34a" font-weight="700">是</text>
+      <text x="450" y="212" font-size="11.5" fill="#e11d48" font-weight="700">否</text>
+      <text x="300" y="608" font-size="11.5" fill="#16a34a" font-weight="700">是</text>
+      <text x="430" y="552" font-size="11.5" fill="#e11d48" font-weight="700">否</text>
+
+      <!-- A -->
+      <rect x="140" y="16" width="300" height="40" rx="10" fill="#0f172a"/>
+      <text x="290" y="41" text-anchor="middle" font-size="13.5" font-weight="700" fill="#fff">assert_test(golden, metrics)</text>
+      <!-- B -->
+      <rect x="140" y="76" width="300" height="40" rx="10" fill="#fff" stroke="#6366f1" stroke-width="1.5"/>
+      <text x="290" y="101" text-anchor="middle" font-size="12.5" fill="#3730a3">校验输入 + 构建评测配置</text>
+      <!-- D -->
+      <rect x="140" y="136" width="300" height="46" rx="10" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
+      <text x="290" y="155" text-anchor="middle" font-size="12.5" font-weight="700" fill="#075985">golden 轨迹分支：读活 trace</text>
+      <text x="290" y="173" text-anchor="middle" font-size="11" fill="#0369a1" class="mono">current_trace_context.get()</text>
+      <!-- E diamond -->
+      <polygon points="290,188 410,222 290,256 170,222" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+      <text x="290" y="227" text-anchor="middle" font-size="12.5" font-weight="700" fill="#92400e">有活 trace?</text>
+      <!-- F (否) -->
+      <rect x="520" y="196" width="400" height="52" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.6"/>
+      <text x="720" y="217" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9f1239">raise DeepEvalError</text>
+      <text x="720" y="236" text-anchor="middle" font-size="11" fill="#be123c">No active trace found（PyCharm 裸 pytest 常踩）</text>
+      <!-- G -->
+      <rect x="140" y="276" width="300" height="46" rx="10" fill="#fff" stroke="#6366f1" stroke-width="1.5"/>
+      <text x="290" y="295" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3730a3">组装 LLMTestCase</text>
+      <text x="290" y="313" text-anchor="middle" font-size="10.5" fill="#64748b">golden.input + trace.output + tools</text>
+      <!-- H -->
+      <rect x="140" y="342" width="300" height="40" rx="10" fill="#fff" stroke="#6366f1" stroke-width="1.5"/>
+      <text x="290" y="367" text-anchor="middle" font-size="12.5" fill="#3730a3">DFS 遍历 span 树</text>
+      <!-- I -->
+      <rect x="140" y="402" width="300" height="52" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+      <text x="290" y="423" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3730a3">对挂 metrics 的 span 调 measure()</text>
+      <text x="290" y="442" text-anchor="middle" font-size="11.5" fill="#f43f5e" font-weight="700">→ 这里才调裁判 LLM 打分</text>
+      <!-- J -->
+      <rect x="140" y="474" width="300" height="46" rx="10" fill="#fff" stroke="#6366f1" stroke-width="1.5"/>
+      <text x="290" y="493" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3730a3">汇总 metricsData</text>
+      <text x="290" y="511" text-anchor="middle" font-size="10.5" fill="#64748b">score / threshold / success / reason</text>
+      <!-- K diamond -->
+      <polygon points="290,526 410,560 290,594 170,560" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+      <text x="290" y="556" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">全部 score</text>
+      <text x="290" y="572" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">≥ threshold?</text>
+      <!-- L (是) -->
+      <rect x="140" y="614" width="300" height="48" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.8"/>
+      <text x="290" y="643" text-anchor="middle" font-size="13.5" font-weight="800" fill="#14532d">pytest PASSED ✅</text>
+      <!-- M (否) -->
+      <rect x="520" y="614" width="400" height="60" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.8"/>
+      <text x="720" y="638" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9f1239">raise AssertionError</text>
+      <text x="720" y="658" text-anchor="middle" font-size="11.5" fill="#be123c">pytest FAILED → 非零退出 → CI 红灯 ❌</text>
+    </svg>
+    <figcaption>图 3 · assert_test 内部流程：真正调 judge 的是 DFS 里的 measure()，raise 是门禁开关</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div>
+      <h3>它干的三件事</h3>
+      <p>① <b>组装用例</b>：golden（输入/期望）+ 活 trace（实际执行）拼成 LLMTestCase。</p>
+      <p>② <b>触发评测</b>：DFS 遍历 span，调 <code class="inl">metric.measure()</code> → 调 judge。</p>
+      <p>③ <b>翻译成败</b>：分数达标与否 → pytest 通过 / <code class="inl">AssertionError</code> 失败。</p>
+    </div>
+    <div>
+      <h3>它不做什么</h3>
+      <p><b class="bad">不重新跑 agent</b>——agent 前面已跑完，trace 已录好，它只是「读」出来。</p>
+      <p><b class="bad">不在记录时打分</b>——update_* 挂的指标对象，到这一步才真正 measure。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 6 judge 时机 ===================== -->
+<section id="timing">
+  <div class="sec-head"><div class="sec-num">6</div><h2>judge 到底何时被调用</h2></div>
+  <div class="sec-sub">关键：不在跑 agent 时，而在「循环体结束、控制权交回迭代器 / assert_test」之后。逐条交替：跑一个 → 评一个。</div>
+
+  <figure>
+    <svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+      <defs>
+        <marker id="sa" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#475569"/></marker>
+        <marker id="sj" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f43f5e"/></marker>
+      </defs>
+
+      <!-- 阶段背景 -->
+      <rect x="30" y="70" width="900" height="245" rx="12" fill="#f0f9ff" opacity="0.55"/>
+      <rect x="30" y="320" width="900" height="180" rx="12" fill="#fff1f2" opacity="0.55"/>
+      <text x="690" y="90" font-size="12" font-weight="800" fill="#0369a1">运行期 · 记录 · 0 裁判</text>
+      <text x="690" y="340" font-size="12" font-weight="800" fill="#be123c">评测期 · 打分 · 调 judge</text>
+
+      <!-- 生命线 -->
+      <g stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4">
+        <line x1="130" y1="60" x2="130" y2="500"/>
+        <line x1="370" y1="60" x2="370" y2="500"/>
+        <line x1="610" y1="60" x2="610" y2="500"/>
+        <line x1="850" y1="60" x2="850" y2="500"/>
+      </g>
+      <!-- 参与者头 -->
+      <g font-size="12.5" font-weight="700" text-anchor="middle">
+        <rect x="40" y="20" width="180" height="40" rx="9" fill="#eef2ff" stroke="#6366f1"/><text x="130" y="45" fill="#3730a3">测试体 / iterator</text>
+        <rect x="280" y="20" width="180" height="40" rx="9" fill="#eef2ff" stroke="#6366f1"/><text x="370" y="45" fill="#3730a3">travel_agent</text>
+        <rect x="520" y="20" width="180" height="40" rx="9" fill="#f5f3ff" stroke="#8b5cf6"/><text x="610" y="45" fill="#6d28d9">trace 树</text>
+        <rect x="760" y="20" width="180" height="40" rx="9" fill="#ffe4e6" stroke="#f43f5e"/><text x="850" y="45" fill="#9f1239">裁判 LLM</text>
+      </g>
+
+      <!-- 1 U->A -->
+      <line x1="130" y1="100" x2="366" y2="100" stroke="#475569" stroke-width="1.8" marker-end="url(#sa)"/>
+      <text x="250" y="93" text-anchor="middle" font-size="11.5" fill="#334155">① golden.input</text>
+      <!-- note over A -->
+      <rect x="230" y="112" width="320" height="44" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+      <text x="390" y="130" text-anchor="middle" font-size="11" fill="#713f12">@observe 建 span · update_* 挂数据+指标</text>
+      <text x="390" y="147" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">（运行期 · 0 次裁判调用）</text>
+      <!-- 2 A self -->
+      <path d="M370,172 H430 V192 H374" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#sa)"/>
+      <text x="440" y="186" font-size="11.5" fill="#334155">② 应用 LLM 决策+工具+回复</text>
+      <!-- 3 A->T -->
+      <line x1="370" y1="216" x2="606" y2="216" stroke="#475569" stroke-width="1.8" marker-end="url(#sa)"/>
+      <text x="490" y="209" text-anchor="middle" font-size="11.5" fill="#334155">③ 录好整棵 trace</text>
+      <!-- 4 A-->U -->
+      <line x1="370" y1="256" x2="134" y2="256" stroke="#475569" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#sa)"/>
+      <text x="250" y="249" text-anchor="middle" font-size="11.5" fill="#334155">④ 返回 final</text>
+      <!-- note over U -->
+      <rect x="40" y="270" width="300" height="40" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+      <text x="190" y="287" text-anchor="middle" font-size="11" fill="#713f12">循环体结束 / 控制权交回迭代器</text>
+      <text x="190" y="303" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">（此刻才进入评测期）</text>
+
+      <!-- 5 U->T -->
+      <line x1="130" y1="356" x2="606" y2="356" stroke="#475569" stroke-width="1.8" marker-end="url(#sa)"/>
+      <text x="370" y="349" text-anchor="middle" font-size="11.5" fill="#334155">⑤ assert_test 读活 trace</text>
+      <!-- 6 U->J -->
+      <line x1="130" y1="396" x2="846" y2="396" stroke="#f43f5e" stroke-width="2" marker-end="url(#sj)"/>
+      <text x="490" y="389" text-anchor="middle" font-size="11.5" font-weight="700" fill="#be123c">⑥ DFS → metric.measure()（调 judge）</text>
+      <!-- 7 J-->U -->
+      <line x1="850" y1="436" x2="134" y2="436" stroke="#f43f5e" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#sj)"/>
+      <text x="490" y="429" text-anchor="middle" font-size="11.5" fill="#9f1239">⑦ score + reason → metricsData</text>
+      <!-- note over U bottom -->
+      <rect x="40" y="452" width="360" height="44" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+      <text x="220" y="470" text-anchor="middle" font-size="11" fill="#14532d">全部达标 → pytest PASSED ✅</text>
+      <text x="220" y="487" text-anchor="middle" font-size="11" fill="#9f1239">否则 raise AssertionError → CI 红灯 ❌</text>
+    </svg>
+    <figcaption>图 4 · judge 调用时机（时序图）：应用 LLM 与裁判 LLM 分处运行期 / 评测期两段</figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>调用</th><th>发生位置</th><th>调 judge？</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inl">update_current_span / trace</code></td><td>agent / llm call <b>内部</b></td><td><b class="ok">❌ 0 次</b>，纯记录</td></tr>
+        <tr><td><code class="inl">metric.measure()</code></td><td>assert_test 的 DFS / evals_iterator 评测阶段</td><td><b class="bad">✅ 这里才调</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">批量总量：<b>N 个 goldens × 约 4 次轨迹级裁判调用</b>（TaskCompletion / StepEfficiency 各约 2 次）+ 组件级裁判调用 + N 次 agent 运行。数据集大时易触发百炼限流——这是评测「卡住」的常见原因。</p>
+</section>
+
+<!-- ===================== 7 数据→指标 ===================== -->
+<section id="mapping">
+  <div class="sec-head"><div class="sec-num">7</div><h2>数据 → 指标：插桩对评测的具体作用</h2></div>
+  <div class="sec-sub">每个指标「吃」的，正是运行期挂上去的那部分数据。数据挂错位置或缺失，对应指标就评不了。</div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>指标</th><th>层级</th><th>挂在哪</th><th>吃哪些 recorded 数据</th><th>评什么</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>ToolCorrectness</b></td>
+          <td><span class="pill p-llm">组件级</span></td>
+          <td>llm 决策 span①②</td>
+          <td><code class="inl">span.tools_called</code> vs <code class="inl">span.expected_tools</code></td>
+          <td>这次决策<b>选对工具没</b></td>
+        </tr>
+        <tr>
+          <td><b>ArgumentCorrectness</b></td>
+          <td><span class="pill p-llm">组件级</span></td>
+          <td>llm 决策 span①②</td>
+          <td><code class="inl">tools_called.input_parameters</code>（+input）</td>
+          <td>工具<b>参数对不对</b>（城市/日期）</td>
+        </tr>
+        <tr>
+          <td><b>TaskCompletion</b></td>
+          <td><span class="pill p-trace">轨迹级</span></td>
+          <td>trace 根</td>
+          <td><code class="inl">trace.input</code>→task，<code class="inl">trace.output</code>→outcome</td>
+          <td>整件事<b>做成没</b>（订到最便宜航班）</td>
+        </tr>
+        <tr>
+          <td><b>StepEfficiency</b></td>
+          <td><span class="pill p-trace">轨迹级</span></td>
+          <td>trace 根</td>
+          <td><b>整棵 span 树</b>的每一步</td>
+          <td>过程<b>省不省</b>（有无多余步骤）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>评测后生成的 metricsData（基线实测）</h3>
+  <pre class="code"><span class="c">// trace 根 metricsData（真实 test_run_20261119_163757.json）</span>
+[
+  { <span class="t">"name"</span>:<span class="s">"Task Completion"</span>,  <span class="t">"score"</span>:<span class="n">0.98</span>, <span class="t">"threshold"</span>:<span class="n">0.7</span>, <span class="t">"success"</span>:<span class="k">true</span> },
+  { <span class="t">"name"</span>:<span class="s">"Step Efficiency"</span>,  <span class="t">"score"</span>:<span class="n">1.0</span>,  <span class="t">"threshold"</span>:<span class="n">0.7</span>, <span class="t">"success"</span>:<span class="k">true</span> }
+]</pre>
+  <p class="note">基线「正常 search→book」两步精简、目标达成 → 轨迹级双双高分。两种失败注入的对照很说明问题：</p>
+  <div class="grid2">
+    <div class="callout key" style="margin:6px 0">
+      <b>--fail-search · 被迫重试</b>
+      首次搜索抛 504，agent 重试。judge 认为「错误恢复」合理 → StepEfficiency <b>不降</b>（0.75→0.75）。必要的重试不是浪费。
+    </div>
+    <div class="callout danger" style="margin:6px 0">
+      <b>--wasteful · 主动冗余</b>
+      无错误也重复搜索「核对」。StepEfficiency <b>下降</b>，且冗余决策 span 的 ToolCorrectness 同步下降——<b>「答案对、过程烂」：轨迹分报警，组件分定位病灶</b>。
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 8 门禁 ===================== -->
+<section id="gate">
+  <div class="sec-head"><div class="sec-num">8</div><h2>断言 → CI 门禁</h2></div>
+  <div class="sec-sub">把「分数达标与否」翻译成「pytest 通过/失败」，就是门禁的落地机制。</div>
+
+  <pre class="code"><span class="k">if</span> test_result.success <span class="k">is</span> <span class="k">False</span>:
+    <span class="c"># 收集所有失败指标，拼成详情</span>
+    <span class="k">raise</span> <span class="t">AssertionError</span>(
+        <span class="s">f"Metrics: TaskCompletion (score:0.4, threshold:0.7, ... reason:...) failed."</span>)
+<span class="c"># success=True → 静默返回 → pytest PASSED</span></pre>
+
+  <p>不达标 → <code class="inl">raise</code> → pytest <b class="bad">FAILED</b> → 进程<b>非零退出</b> → CI 红灯 → <b>挡住合并</b>。达标 → PASSED → 绿灯放行。</p>
+
+  <div class="callout danger">
+    <b>PyCharm 点绿色三角默认会失败</b>
+    <code class="inl">assert_test(golden=...)</code> 需要「活 trace」，靠 deepeval pytest 插件的 eval scope，而插件被环境变量 <code class="inl">DEEPEVAL</code> 开关控制。<code class="inl">deepeval test run</code> 会自动设 <code class="inl">DEEPEVAL=true</code>；PyCharm 裸 pytest 没设 → 报 <code class="inl">No active trace found</code>。<br>
+    <b>解决</b>：在 Run Configuration 的 Environment variables 加 <code class="inl">DEEPEVAL=true</code>（并用项目 .venv 解释器），即可点绿色三角运行。
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>运行方式</th><th>DEEPEVAL</th><th>插件 eval scope</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inl">uv run deepeval test run ...</code></td><td>自动 true</td><td>激活</td><td class="ok">✅</td></tr>
+        <tr><td>PyCharm 绿色三角（默认）</td><td>未设</td><td>跳过</td><td class="bad">❌ No active trace</td></tr>
+        <tr><td>PyCharm + <code class="inl">DEEPEVAL=true</code></td><td>true</td><td>激活</td><td class="ok">✅</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== 总结 ===================== -->
+<section class="finale">
+  <div class="big">运行期只管「如实记录 + 把指标挂到对的节点」，<br>评测期才「读树打分」——<em>两者解耦</em>。</div>
+  <p>@observe 负责<b style="color:#fff">结构</b>（有哪些步骤、怎么嵌套）；update_current_span 负责<b style="color:#fff">局部语义</b>（这一步决策对不对 → 组件级）；update_current_trace 负责<b style="color:#fff">全局语义</b>（整件事成没成、省不省 → 轨迹级）。</p>
+  <p>三者配合，裁判既能「指着某个决策 span 说病灶」（组件分），又能「对着整棵树说整体病情」（轨迹分）。</p>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--agent)"></span>agent span</span>
+    <span><span class="dot" style="background:var(--llm)"></span>llm span</span>
+    <span><span class="dot" style="background:var(--tool)"></span>tool span</span>
+    <span><span class="dot" style="background:var(--app)"></span>应用 LLM</span>
+    <span><span class="dot" style="background:var(--inst)"></span>插桩</span>
+    <span><span class="dot" style="background:var(--judge)"></span>裁判 LLM</span>
+  </div>
+</section>
+
+<footer>
+  配套案例：src/deepeval_cases/agent_tools.py（脚本实验台）· test_agent.py（CI 门禁形态）<br>
+  结构经 deepeval 4.3.4 源码与真实 test_run_*.json 核实 ·
+  <a href="https://deepeval.com/docs/getting-started">DeepEval 官方文档</a>
+</footer>
+
+</div>
+
+</body>
+</html>
