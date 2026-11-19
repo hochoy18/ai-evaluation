@@ -6,4 +6,7 @@
 __pycache__/
 *.pyc
 .deepeval/
-data/
+data/*
+# 真题资产进 git(架构 §10.1);其余 data 产物(快照/索引/报告)忽略
+!data/rag_goldens_medical.json
+!data/rag_goldens.json

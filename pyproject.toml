@@ -10,7 +10,10 @@ requires-python = ">=3.12"
 dependencies = [
     "deepeval>=4.3.4",
     "ipykernel",
+    "openai>=3.3.0",
+    "python-dotenv>=1.2.4",
     "ragas>=0.4.4",
+    "rich>=14.3.4",
     "textual>=8.2.8",
 ]
 

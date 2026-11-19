@@ -1,0 +1,101 @@
+[
+  {
+    "id": "g001",
+    "question": "腋下体温37.5℃算发烧吗,低烧该怎么处理?",
+    "expected_output": "腋下体温≥37.3℃即属发烧,37.5℃算发烧。低烧可先物理降温、多饮水;退烧药需在医生指导下使用。",
+    "expected_doc_ids": ["fever"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "fever 文档:发烧定义(≥37.3℃)与低烧处理。关键词 发烧/体温/低烧 命中,检索应排第一。"
+  },
+  {
+    "id": "g002",
+    "question": "成人发烧持续几天不退就应该去医院?",
+    "expected_output": "成人发烧持续超过3天不退,或伴随呼吸困难、意识改变,应及时就医。",
+    "expected_doc_ids": ["fever"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "fever 文档:就医时机(3天/伴随症状)。与 g001 同文档不同事实点,考查全。"
+  },
+  {
+    "id": "g003",
+    "question": "咳嗽有黄脓痰提示什么?",
+    "expected_output": "黄脓痰可能提示细菌感染。湿咳需观察痰色与痰量。",
+    "expected_doc_ids": ["cough"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "cough 文档:湿咳痰色观察。关键词 咳嗽/痰 命中。"
+  },
+  {
+    "id": "g004",
+    "question": "高血压患者日常生活中要注意什么?",
+    "expected_output": "生活方式干预包括限盐(每日<5克)、规律运动、控制体重、戒烟限酒。确诊后需长期监测并遵医嘱规范治疗,不可自行停药。",
+    "expected_doc_ids": ["hypertension"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "hypertension 文档:生活方式干预与长期管理。关键词 高血压/血压 命中。"
+  },
+  {
+    "id": "g005",
+    "question": "糖尿病有哪些典型症状,血糖多少能确诊?",
+    "expected_output": "典型症状为「三多一少」:多饮、多尿、多食、体重下降。诊断标准:空腹血糖≥7.0mmol/L,或餐后2小时血糖≥11.1mmol/L,或糖化血红蛋白≥6.5%。",
+    "expected_doc_ids": ["diabetes"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "diabetes 文档:症状+诊断标准两个事实点,单文档可答。关键词 糖尿病/血糖 命中。"
+  },
+  {
+    "id": "g006",
+    "question": "根据挂号指南,出现哪些急重症情况应该直接去急诊?只列情况即可。",
+    "expected_output": "突发高热伴意识改变、呼吸困难、剧烈胸痛等急重症直接去急诊。",
+    "expected_doc_ids": ["registration"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "registration 文档:急重症去急诊。措辞避开 fever 关键词(高热/发烧),让 急诊 单独命中 registration。修订(issue #2 基线 AR=0.5):原题干过窄,生成端忠实总结 top-3 中 fever/cough 就医建议致 AR 跌;加「根据挂号指南」+「只列情况即可」显式收敛范围,AR=1.0,检索与 expected_output 不变。"
+  },
+  {
+    "id": "g007",
+    "question": "抗生素可以自己买来吃吗?",
+    "expected_output": "处方药须凭医生处方使用,抗生素不可自行服用。",
+    "expected_doc_ids": ["medication"],
+    "difficulty": "single_hop",
+    "source": "synthetic",
+    "notes": "medication 文档:处方药/抗生素规则。关键词 抗生素 命中。"
+  },
+  {
+    "id": "g008",
+    "question": "干咳快三周了,去医院挂什么科?",
+    "expected_output": "干咳持续超过2周,应尽快到呼吸内科检查。发烧、咳嗽等呼吸道症状挂呼吸内科。",
+    "expected_doc_ids": ["cough", "registration"],
+    "difficulty": "cross_doc",
+    "source": "synthetic",
+    "notes": "cross_doc:就医时机在 cough,挂号科室在 registration,两篇各贡献一半答案。关键词 干咳→cough、挂/科→registration。"
+  },
+  {
+    "id": "g009",
+    "question": "发烧想吃布洛芬退烧,两次用药要间隔多久?",
+    "expected_output": "退烧药需在医生指导下使用,两次用药间隔至少4-6小时,24小时不超过4次;不要叠加多种复方感冒药,避免相同成分过量。",
+    "expected_doc_ids": ["fever", "medication"],
+    "difficulty": "cross_doc",
+    "source": "synthetic",
+    "notes": "cross_doc:间隔在 fever 与 medication 都有,24小时上限与复方感冒药警告只在 medication。关键词 发烧/退烧→fever、药/用药/布洛芬→medication。"
+  },
+  {
+    "id": "g010",
+    "question": "明天北京的天气怎么样?",
+    "expected_output": "资料中没有相关信息。",
+    "expected_doc_ids": [],
+    "difficulty": "out_of_domain",
+    "source": "synthetic",
+    "notes": "纯域外(天气),医疗语料无任何相关内容。剔出四指标门禁,留拒答集(P3)。"
+  },
+  {
+    "id": "g011",
+    "question": "帮我写一首关于春天的诗。",
+    "expected_output": "资料中没有相关信息。",
+    "expected_doc_ids": [],
+    "difficulty": "out_of_domain",
+    "source": "synthetic",
+    "notes": "纯域外(创作请求),与医疗咨询无关。剔出四指标门禁,留拒答集(P3)。"
+  }
+]

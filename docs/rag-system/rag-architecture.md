@@ -465,7 +465,7 @@ test_rag.py 的 git diff 为空 + 分数矩阵产出 = 解耦原则的实证。
 | ContextualPrecision | ✓ | — | ✓ | ✓ | ❌ 仅离线 |
 | ContextualRecall | ✓ | — | ✓ | ✓ | ❌ 仅离线 |
 
-裁判统一 `bailian_judge("qwen-plus", temperature=0.0)`(`src/ai_evaluation/models.py`,已有)。
+裁判统一 `bailian_judge("qwen3.7-plus", temperature=0.0)`(`src/ai_evaluation/models.py`,已有;原稿 qwen-plus 在 token-plan 端点实测 404,用户改定 qwen3.7-plus,见附录 E 第三轮)。
 易错点照抄学习计划:Faithfulness 也要 input;`retrieval_context` 有序 list[str];Ragas 字段名映射(`user_input`/`response`/`retrieved_contexts`/`reference`)。
 
 ### 10.3 非 LLM 检索指标(零裁判成本,检索迭代高频跑)
@@ -733,6 +733,18 @@ score(D) = 1/(60+3)             = 0.01587
 | embedding batch=11 | ❌ 400「batch size is invalid, it should not be larger than 10」——**上限 10 实测确认** |
 | embedding batch=10,dimensions=1024 | ✅ dim=1024,usage 120 token |
 | gte-rerank-v2 @ dashscope 原生 HTTP,3 候选 | ✅ 200,usage 63 token;**强相关文档 top-1 relevance_score ≈ 0.188**(相对分数语义的实测佐证:固定 0.3 阈值会把所有查询误判低置信) |
+
+**第三轮(裁判模型可用性,2026-11-19,P0 门禁落地时)**:
+
+| 探针 | 结果 |
+|---|---|
+| qwen-plus @ token-plan compatible endpoint | ❌ 404 `Model not exist`——裁判原稿模型在套餐端点不存在 |
+| qwen-max / qwen-turbo / qwen-plus-latest / qwen-flash 等 @ token-plan | ❌ 404(逐一探测均不存在) |
+| qwen4-max-preview @ token-plan | ✅ 可用(生成端现用) |
+| qwen3.7-plus @ token-plan | ✅ 可用——**用户改定为裁判**(与被测生成端不同模型,避免自评) |
+| qwen-plus @ dashscope 公共端点,DASHSCOPE_API_KEY | ❌ 403 `Free quota exhausted`——按量账户免费额度耗尽,P1/P2 embedding/rerank 前需充值 |
+
+deepeval 4.3.4 会把裁判调用异常静默吞成 score=None(reason/error 均空),门禁全 FAILED 却无原因——`rag_fingerprint.py` 跑三模式前先做裁判冒烟,失败即终止。
 
 **官方文档事实**(help.aliyun.com,2026-11-19 抓取):
 

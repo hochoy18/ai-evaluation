@@ -20,7 +20,10 @@ source = { editable = "." }
 dependencies = [
     { name = "deepeval" },
     { name = "ipykernel" },
+    { name = "openai" },
+    { name = "python-dotenv" },
     { name = "ragas" },
+    { name = "rich" },
     { name = "textual" },
 ]
 
@@ -28,7 +31,10 @@ dependencies = [
 requires-dist = [
     { name = "deepeval", specifier = ">=4.3.4" },
     { name = "ipykernel" },
+    { name = "openai", specifier = ">=3.3.0" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "ragas", specifier = ">=0.4.4" },
+    { name = "rich", specifier = ">=14.3.4" },
     { name = "textual", specifier = ">=8.2.8" },
 ]
 

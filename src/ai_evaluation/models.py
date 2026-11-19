@@ -20,7 +20,7 @@ BAILIAN_BASE_URL = os.environ.get(
 )
 
 
-def bailian_judge(model: str = "qwen-plus", **kwargs) -> OpenAIModel:
+def bailian_judge(model: str = "qwen3.7-plus", **kwargs) -> OpenAIModel:
     """返回一个指向百炼的 DeepEval 裁判模型。
 
     Args:
