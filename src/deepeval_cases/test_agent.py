@@ -23,6 +23,7 @@ import 时实验开关自动为 False → CI 只测基线路径。
 """
 
 import pytest
+from rich import print as rprint
 
 from deepeval import assert_test
 from deepeval.dataset import Golden
@@ -37,7 +38,11 @@ goldens = [
 
 @pytest.mark.parametrize("golden", goldens)
 def test_flight_agent(golden: Golden):
-    travel_agent(golden.input)  # trace 由 @observe 自动捕获
+    result = travel_agent(golden.input)  # trace 由 @observe 自动捕获
+    rprint('======== golden.input ==========\n',
+           golden.input,
+           '\n======== result ==========\n',
+           result)
     assert_test(
         golden=golden,  # 传 golden 不是 test_case:DeepEval 自动组装轨迹用例
         metrics=[

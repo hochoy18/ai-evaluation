@@ -142,14 +142,14 @@ def call_llm(messages: list):
             for m in messages
         )
         expected = [ToolCall(name="book_flight" if searched else "search_flights")]
-        # update_current_span(
-        #     tools_called=called,
-        #     expected_tools=expected,
-        #     metrics=[
-        #         ToolCorrectnessMetric(threshold=0.7, model=judge_model),
-        #         ArgumentCorrectnessMetric(threshold=0.7, model=judge_model),
-        #     ],
-        # )
+        update_current_span(
+            tools_called=called,
+            expected_tools=expected,
+            metrics=[
+                ToolCorrectnessMetric(threshold=0.7, model=judge_model),
+                ArgumentCorrectnessMetric(threshold=0.7, model=judge_model),
+            ],
+        )
     return msg
 
 
@@ -186,13 +186,13 @@ def travel_agent(user_input: str) -> str:
                 out = f"工具调用失败: {e}"  # 错误回喂给 LLM,让它自行恢复
             tools_called.append(ToolCall(name=tc.function.name, input_parameters=args, output=out))
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": out})
-    #
-    # update_current_trace(
-    #     input=user_input,
-    #     output=final,
-    #     tools_called=tools_called,
-    #     expected_tools=[ToolCall(name="search_flights"), ToolCall(name="book_flight")],
-    # )
+
+    update_current_trace(
+        input=user_input,
+        output=final,
+        tools_called=tools_called,
+        expected_tools=[ToolCall(name="search_flights"), ToolCall(name="book_flight")],
+    )
     return final
 
 
