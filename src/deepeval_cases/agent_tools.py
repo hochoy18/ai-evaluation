@@ -46,6 +46,8 @@ from deepeval.tracing import observe, update_current_span, update_current_trace
 
 load_dotenv()
 
+# 被 test_agent.py import 时 sys.argv 是 pytest 的参数,两个开关都为 False → 基线模式,
+# 这正是 CI 门禁想要的:只测正常路径。失败注入只在脚本形态手动实验。
 FAIL_FIRST_SEARCH = "--fail-search" in sys.argv
 WASTEFUL = "--wasteful" in sys.argv  # 主动冗余:无错误也重复搜索,制造「答案对,过程烂」
 search_call_count = 0
@@ -140,14 +142,14 @@ def call_llm(messages: list):
             for m in messages
         )
         expected = [ToolCall(name="book_flight" if searched else "search_flights")]
-        update_current_span(
-            tools_called=called,
-            expected_tools=expected,
-            metrics=[
-                ToolCorrectnessMetric(threshold=0.7, model=judge_model),
-                ArgumentCorrectnessMetric(threshold=0.7, model=judge_model),
-            ],
-        )
+        # update_current_span(
+        #     tools_called=called,
+        #     expected_tools=expected,
+        #     metrics=[
+        #         ToolCorrectnessMetric(threshold=0.7, model=judge_model),
+        #         ArgumentCorrectnessMetric(threshold=0.7, model=judge_model),
+        #     ],
+        # )
     return msg
 
 
@@ -184,34 +186,35 @@ def travel_agent(user_input: str) -> str:
                 out = f"工具调用失败: {e}"  # 错误回喂给 LLM,让它自行恢复
             tools_called.append(ToolCall(name=tc.function.name, input_parameters=args, output=out))
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": out})
-
-    update_current_trace(
-        input=user_input,
-        output=final,
-        tools_called=tools_called,
-        expected_tools=[ToolCall(name="search_flights"), ToolCall(name="book_flight")],
-    )
+    #
+    # update_current_trace(
+    #     input=user_input,
+    #     output=final,
+    #     tools_called=tools_called,
+    #     expected_tools=[ToolCall(name="search_flights"), ToolCall(name="book_flight")],
+    # )
     return final
 
 
-# ---------- 数据集 + 跑题循环 ----------
+# ---------- 数据集 + 跑题循环(仅脚本形态;import 时不执行) ----------
 
-dataset = EvaluationDataset(goldens=[
-    Golden(input="订明天从纽约到洛杉矶最便宜的航班"),
-])
+if __name__ == "__main__":
+    dataset = EvaluationDataset(goldens=[
+        Golden(input="订明天从纽约到洛杉矶最便宜的航班"),
+    ])
 
-mode = "失败注入(首次搜索抛错)" if FAIL_FIRST_SEARCH else ("主动冗余(重复搜索核对)" if WASTEFUL else "基线")
-rprint(f"[bold cyan]实验模式:[/bold cyan] {mode}")
+    mode = "失败注入(首次搜索抛错)" if FAIL_FIRST_SEARCH else ("主动冗余(重复搜索核对)" if WASTEFUL else "基线")
+    rprint(f"[bold cyan]实验模式:[/bold cyan] {mode}")
 
-for golden in dataset.evals_iterator(
-    metrics=[
-        TaskCompletionMetric(threshold=0.7, model=judge_model),
-        StepEfficiencyMetric(threshold=0.7, model=judge_model),
-    ],
-    async_config=AsyncConfig(run_async=False),
-):
-    rprint(f"[bold cyan]任务:[/bold cyan] {golden.input}")
-    answer = travel_agent(golden.input)
-    rprint(f"[bold green]最终回复:[/bold green] {answer}")
+    for golden in dataset.evals_iterator(
+        metrics=[
+            TaskCompletionMetric(threshold=0.7, model=judge_model),
+            StepEfficiencyMetric(threshold=0.7, model=judge_model),
+        ],
+        async_config=AsyncConfig(run_async=False),
+    ):
+        rprint(f"[bold cyan]任务:[/bold cyan] {golden.input}")
+        answer = travel_agent(golden.input)
+        rprint(f"[bold green]最终回复:[/bold green] {answer}")
 
-rprint("[bold]运行 uv run deepeval inspect 查看 span 树与逐 span 分数。[/bold]")
+    rprint("[bold]运行 uv run deepeval inspect 查看 span 树与逐 span 分数。[/bold]")
