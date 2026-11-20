@@ -196,10 +196,10 @@ data/
 | source_path | str | 语料内相对路径,溯源反查 |
 | title | str | 文档 H1 或 front-matter title |
 | heading_path | str | 面包屑,如 `售后政策 > 退款 > 退款时效` |
-| chunk_index | int | section 内序号;chunk id = `{doc_id}:{chunk_index}` |
+| chunk_index | int | 文档内全局序号(id 唯一性要求,跨 section 连续);chunk id = `{doc_id}:{chunk_index}` |
 | content_hash | str | chunk 文本 hash,调试用 |
 | tags | str | front-matter tags 逗号拼接(Chroma metadata 值须为标量) |
-| oversize | bool | 原子块超限标记 |
+| oversize | bool | 超限标记:原子块超限独立成 chunk,或正文超上限且无法按块边界再切(如单个超长段落);不存在未标记的超限 chunk |
 
 ### 4.5 增量更新状态机
 
@@ -569,14 +569,25 @@ RAG_RETRIEVER=keyword            # keyword | vector | hybrid(默认 keyword,基�
 RAG_TOP_K=3
 RAG_CORPUS_DIR=./docs            # 语料 = 本仓库 docs/(13 篇 md);真实业务文档到位后换目录
 RAG_INDEX_DIR=./data/rag_index
+RAG_MANIFEST_FILE=./data/rag_manifest.json
 RAG_GOLDENS_FILE=./data/rag_goldens.json   # 医疗 P0 指向 rag_goldens_medical.json,切集零改动
 RAG_BAD_RETRIEVAL_DOC=           # 失败注入固定无关文档(缺省 = 语料排序末篇)
 
 # ---- Embedding(百炼按量计费,独立于生成端 token-plan key)----
 DASHSCOPE_API_KEY=               # 必填:普通 sk- key(按量计费);token-plan key 实测不可用(附录 E)
+EMBEDDING_BACKEND=bailian        # bailian | fake(确定性假向量,零网络零计费,仅 hermetic 测试/无 key 演示)
 EMBEDDING_MODEL=text-embedding-v4
 EMBEDDING_DIM=1024
 EMBEDDING_BATCH=10               # 官方上限 10 条(v3/v4),单条 8192 token;已实测
+EMBEDDING_BASE_URL=              # 缺省 https://dashscope.aliyuncs.com/compatible-mode/v1(双 key 双 endpoint)
+EMBEDDING_COST_PER_MILLION_TOKENS=0.5   # 成本估算(ingest 日志用)
+EMBEDDING_MAX_RETRIES=5          # 失败重试;429 优先 Retry-After,无则指数退避
+
+# ---- Chunk 切分(字符计量,§4.3 初值,P3 校准)----
+RAG_CHUNK_TARGET=700
+RAG_CHUNK_MAX=1100
+RAG_CHUNK_MIN=140
+RAG_CHUNK_OVERLAP=100
 
 # ---- Rerank(DashScope 原生 API,按量计费 key)----
 RERANK_MODEL=gte-rerank-v2
